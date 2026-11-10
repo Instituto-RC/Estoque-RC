@@ -3,6 +3,7 @@ import { ArrowDownToLine, ArrowUpFromLine, AlertTriangle, CalendarClock, Upload 
 import { createClient } from "@/lib/supabase/server";
 import { brl, num, STATUS_ORDER } from "@/lib/format";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ExpiryBadge } from "@/components/ExpiryBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function Dashboard() {
   const supabase = await createClient();
   const [{ data: stock }, { data: lots }, { data: monthly }, { data: totals }] = await Promise.all([
     supabase.from("v_product_stock").select("product_id, code, name, balance, min_stock, stock_value, status, active").eq("active", true),
-    supabase.from("v_lot_stock").select("lot_id, days_to_expiry, balance").gt("balance", 0).lte("days_to_expiry", 30),
+    supabase.from("v_expiry_summary").select("*"),
     supabase.from("v_monthly_movements").select("*").order("month", { ascending: false }).limit(1),
     supabase.from("v_totals").select("*").maybeSingle(),
   ]);
@@ -115,8 +116,17 @@ export default async function Dashboard() {
             <CalendarClock size={18} className="text-st-baixo" />
             <h2 className="text-lg">Validade</h2>
           </div>
-          <p className="font-display text-3xl">{num(lots?.length ?? 0)}</p>
-          <p className="text-sm text-azul-600">lotes vencidos ou vencendo em até 30 dias</p>
+          <ul className="space-y-1.5">
+            {["vencido", "critico", "atencao", "aviso", "sem_validade"].map((b) => {
+              const r = (lots ?? []).find((x: { expiry_status: string }) => x.expiry_status === b) as { lots: number; qty: number; value: number } | undefined;
+              return (
+                <li key={b} className="flex items-center justify-between gap-2 text-sm">
+                  <ExpiryBadge status={b} />
+                  <span className="tabular-nums text-azul-600">{num(r?.lots ?? 0)} lotes · {brl(r?.value ?? 0)}</span>
+                </li>
+              );
+            })}
+          </ul>
           <Link href="/inventario" className="mt-2 inline-block text-sm font-semibold underline">Ver validades</Link>
         </section>
       </div>

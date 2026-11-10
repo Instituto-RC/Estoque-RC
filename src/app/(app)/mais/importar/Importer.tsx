@@ -24,6 +24,7 @@ export function Importer() {
   const [filter, setFilter] = useState<Level | "">("");
   const [result, setResult] = useState<Record<string, number | string> | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [valRes, setValRes] = useState<{ atualizados: number; separados: number; ignorados: number; avisos: { code: string; msg: string }[] } | null>(null);
 
   // Somente ambiente local de testes (NEXT_PUBLIC_TEST_IMPORT_URL=1): ?arquivo=<url> carrega a planilha sem o seletor de arquivos
   useEffect(() => {
@@ -35,7 +36,7 @@ export function Importer() {
       const b = await r.blob();
       onFile(new File([b], decodeURIComponent(url.split("/").pop() || "planilha.xlsx")));
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onFile(f: File | undefined) {
     if (!f) return;
@@ -54,10 +55,19 @@ export function Importer() {
     if (!payload) return;
     setSaving(true); setErr(null);
     const sb = createClient();
-    const { data, error } = await sb.rpc("import_planilha", { p: payload });
+    const { data, error } = await sb.rpc("import_planilha_completa", { p: payload });
     setSaving(false);
     if (error) return setErr(friendlyError(error.message));
     setResult(data as Record<string, number | string>);
+  }
+
+  async function onlyValidities() {
+    if (!payload) return;
+    setSaving(true); setErr(null); setValRes(null);
+    const { data, error } = await createClient().rpc("aplicar_validades", { p: payload.validades });
+    setSaving(false);
+    if (error) return setErr(friendlyError(error.message));
+    setValRes(data);
   }
 
   if (lk.loaded && lk.role !== "admin")
@@ -110,8 +120,8 @@ export function Importer() {
                 </tbody>
               </table>
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
-              {[["Produtos", s.products], ["Fornecedores", s.suppliers], ["Locais", s.locations], ["Centros", s.centers], ["Entradas", s.entries], ["Saídas", s.exits]].map(([l, n]) => (
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:grid-cols-7">
+              {[["Com validade", s.validades_lidas ?? 0], ["Produtos", s.products], ["Fornecedores", s.suppliers], ["Locais", s.locations], ["Centros", s.centers], ["Entradas", s.entries], ["Saídas", s.exits]].map(([l, n]) => (
                 <div key={l as string} className="rounded-xl bg-neve p-2"><p className="font-display text-xl">{num(n as number)}</p><p className="text-[11px] text-azul-600">{l}</p></div>
               ))}
             </div>
@@ -140,6 +150,17 @@ export function Importer() {
             {s.products_review > 0 && <p className="mt-3 text-sm text-azul-600">{s.products_review} produtos ficarão marcados com “revisar cadastro”.</p>}
           </Card>
 
+          {valRes && (
+            <Alert type="ok">
+              Validades aplicadas: {valRes.atualizados} produtos datados{valRes.separados ? ", " + valRes.separados + " separados em vários lotes" : ""}{valRes.ignorados ? ", " + valRes.ignorados + " sem saldo importado" : ""}.
+              {valRes.avisos?.length ? <span className="mt-1 block text-xs">{valRes.avisos.map((a) => a.code + ": " + a.msg).join(" · ")}</span> : null}
+            </Alert>
+          )}
+          {payload!.validades.length > 0 && (
+            <Button variant="ghost" onClick={onlyValidities} disabled={saving} className="w-full">
+              Atualizar só as validades ({payload!.validades.length} produtos) — não mexe nas movimentações
+            </Button>
+          )}
           <Button onClick={doImport} disabled={saving || blocking || !!result} className="w-full">
             <Upload size={18} /> {saving ? "Gravando no banco..." : result ? "Importado" : "Confirmar e importar"}
           </Button>

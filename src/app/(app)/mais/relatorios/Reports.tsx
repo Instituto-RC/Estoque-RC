@@ -7,6 +7,8 @@ import { Button, Card, PageHeader, fmtDate } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { brl, num } from "@/lib/format";
 import { exportXlsx } from "@/lib/exportXlsx";
+import { useSettings } from "@/lib/settings";
+import { useEffect } from "react";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = Record<string, any>;
@@ -15,6 +17,8 @@ const ml = (m: string) => { const [y, mm] = m.split("-"); return `${MONTHS[Numbe
 
 export function Reports({ monthly, stock, totals, bySupplier, byDest }: { monthly: Any[]; stock: Any[]; totals: Any | null; bySupplier: Any[]; byDest: Any[] }) {
   const [idle, setIdle] = useState(60);
+  const st = useSettings();
+  useEffect(() => { if (st.loaded) setIdle(st.num("sem_giro_dias")); }, [st.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   let acc = 0;
   const months: Any[] = monthly.map((m) => { acc += Number(m.entries_value) - Number(m.exits_value); return { ...m, acc }; });
   const max = Math.max(1, ...months.map((m) => Math.max(Number(m.entries_value), Number(m.exits_value))));
@@ -94,7 +98,7 @@ export function Reports({ monthly, stock, totals, bySupplier, byDest }: { monthl
         </Card>
 
         <Card title="Itens sem saída">
-          <div className="mb-2 flex gap-2">{[30, 60, 90, 180].map((d) => <button key={d} onClick={() => setIdle(d)} className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${idle === d ? "bg-azul text-ouro ring-azul" : "ring-marfim"}`}>{d} dias</button>)}</div>
+          <div className="mb-2 flex gap-2">{Array.from(new Set([30, 60, 90, 180, st.num("sem_giro_dias")])).sort((a, b) => a - b).map((d) => <button key={d} onClick={() => setIdle(d)} className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${idle === d ? "bg-azul text-ouro ring-azul" : "ring-marfim"}`}>{d} dias</button>)}</div>
           <p className="mb-2 text-sm">{idleItems.length} itens · {brl(idleItems.reduce((a, s) => a + Number(s.stock_value), 0))} parados</p>
           <ul className="max-h-64 divide-y divide-marfim/70 overflow-auto">
             {idleItems.slice(0, 60).map((s) => (

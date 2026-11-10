@@ -7,9 +7,11 @@ import { ProductPicker, type PickProduct } from "@/components/ProductPicker";
 import { Alert, Button, Card, Field, PageHeader, inputCls, today } from "@/components/ui";
 import { useLookups, canWrite, friendlyError } from "@/lib/lookups";
 import { brl } from "@/lib/format";
+import { useSettings } from "@/lib/settings";
 
 export function EntradaForm() {
   const lk = useLookups();
+  const st = useSettings();
   const [product, setProduct] = useState<PickProduct | null>(null);
   const [qty, setQty] = useState("");
   const [cost, setCost] = useState("");
@@ -36,6 +38,9 @@ export function EntradaForm() {
   const q = Number(qty.replace(",", "."));
   const c = Number(cost.replace(",", "."));
   const needLot = product?.requires_lot ?? false;
+  const needExpiry = product?.requires_expiry ?? true;
+  const minDays = st.num("validade_minima_entrada_dias");
+  const daysLeft = expiry ? Math.round((new Date(expiry).getTime() - new Date(date).getTime()) / 86400000) : null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,20 +48,21 @@ export function EntradaForm() {
     if (!product) return setMsg({ type: "error", text: "Selecione o produto." });
     if (!(q > 0)) return setMsg({ type: "error", text: "Informe a quantidade." });
     if (!(c >= 0) || cost === "") return setMsg({ type: "error", text: "Informe o custo unitário." });
-    if (!expiry) return setMsg({ type: "error", text: "Validade é obrigatória." });
+    if (!expiry && needExpiry) return setMsg({ type: "error", text: "Validade é obrigatória." });
     if (needLot && !lot.trim()) return setMsg({ type: "error", text: "Número do lote é obrigatório para IMPLANTE e HOF." });
-    if (expiry < date) return setMsg({ type: "error", text: "A validade informada já está vencida." });
+    if (expiry && expiry < date) return setMsg({ type: "error", text: "A validade informada já está vencida." });
     setSaving(true);
     const sb = createClient();
     try {
       // lote: reaproveita se já existir (produto + lote + validade)
       const lotNumber = lot.trim().toUpperCase() || null;
-      let lotQ = sb.from("lots").select("id").eq("product_id", product.product_id).eq("expiry_date", expiry);
+      let lotQ = sb.from("lots").select("id").eq("product_id", product.product_id).eq("is_legacy", false);
+      lotQ = expiry ? lotQ.eq("expiry_date", expiry) : lotQ.is("expiry_date", null);
       lotQ = lotNumber ? lotQ.eq("lot_number", lotNumber) : lotQ.is("lot_number", null);
       const { data: found } = await lotQ.maybeSingle();
       let lotId = found?.id as string | undefined;
       if (!lotId) {
-        const { data: created, error } = await sb.from("lots").insert({ product_id: product.product_id, lot_number: lotNumber, expiry_date: expiry, supplier_id: supplier || null }).select("id").single();
+        const { data: created, error } = await sb.from("lots").insert({ product_id: product.product_id, lot_number: lotNumber, expiry_date: expiry || null, supplier_id: supplier || null }).select("id").single();
         if (error) throw error;
         lotId = created.id;
       }
@@ -114,7 +120,7 @@ export function EntradaForm() {
               <Field label="Lote" required={needLot} hint={needLot ? "Obrigatório (IMPLANTE/HOF)" : "Opcional"}>
                 <input className={inputCls} value={lot} onChange={(e) => setLot(e.target.value)} autoCapitalize="characters" />
               </Field>
-              <Field label="Validade" required>
+              <Field label="Validade" required={needExpiry} hint={daysLeft !== null && minDays > 0 && daysLeft < minDays ? "Atenção: vence em " + daysLeft + " dias (mínimo configurado: " + minDays + ")." : undefined}>
                 <input type="date" className={inputCls} value={expiry} onChange={(e) => setExpiry(e.target.value)} />
               </Field>
             </div>

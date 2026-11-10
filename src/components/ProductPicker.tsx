@@ -17,6 +17,7 @@ export type PickProduct = {
   location_id: string | null;
   location_name: string | null;
   requires_lot: boolean;
+  requires_expiry?: boolean;
   processes: string | null;
   status: string;
   barcode: string | null;
@@ -35,7 +36,7 @@ export function ProductPicker({ value, onChange }: { value: PickProduct | null; 
   useEffect(() => {
     createClient()
       .from("v_product_stock")
-      .select("product_id, code, name, unit, balance, avg_cost, initial_unit_cost, location_id, location_name, requires_lot, processes, status, barcode, manufacturer_ref, preferred_supplier_id")
+      .select("product_id, code, name, unit, balance, avg_cost, initial_unit_cost, location_id, location_name, requires_lot, requires_expiry, processes, status, barcode, manufacturer_ref, preferred_supplier_id")
       .eq("active", true)
       .order("name")
       .then(({ data }) => setAll((data ?? []) as PickProduct[]));

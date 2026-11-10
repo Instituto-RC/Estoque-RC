@@ -7,6 +7,7 @@ import { PageHeader, Button, Empty, fmtDate } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { brl, num, STATUS_ORDER } from "@/lib/format";
 import { exportXlsx } from "@/lib/exportXlsx";
+import { ExpiryBadge, EXPIRY_LABEL } from "@/components/ExpiryBadge";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = Record<string, any>;
@@ -30,7 +31,7 @@ export function Inventory({ stock, centers, lots }: { stock: Any[]; centers: Any
     exportXlsx(`inventario-estoque-rc-${new Date().toISOString().slice(0, 10)}.xlsx`, [
       { name: "Inventário geral", rows: stock.map((r) => ({ Código: r.code, Produto: r.name, Processo: r.processes, Localização: r.location_name, "Estoque mínimo": r.min_stock, Entradas: r.entries_qty, Saídas: r.exits_qty, "Estoque atual": r.balance, Status: r.status, "Total de gastos": r.total_spent, "% de gastos": r.pct_spent, "% no estoque": r.pct_stock, "Custo médio": r.avg_cost, "Giro (saídas/mín.)": r.turnover, "Curva ABC": r.abc_class, "Valor em estoque": r.stock_value })) },
       { name: "Por centro", rows: centers.map((r) => ({ Centro: r.center_name, Código: r.code, Produto: r.name, "Estoque mínimo": r.min_stock, Entradas: r.entries_qty, Saídas: r.exits_qty, "Estoque atual": r.balance, Status: r.status, "Total de gastos": r.total_spent, "Próxima validade": r.next_expiry })) },
-      { name: "Lotes e validades", rows: lots.map((l) => ({ Código: l.code, Produto: l.name, Lote: l.is_legacy ? "SALDO IMPORTADO" : l.lot_number, Validade: l.expiry_date, "Dias p/ vencer": l.days_to_expiry, Saldo: l.balance })) },
+      { name: "Lotes e validades", rows: lots.map((l) => ({ Código: l.code, Produto: l.name, Lote: l.is_legacy ? "SALDO IMPORTADO" : l.lot_number, Validade: l.expiry_date, "Dias p/ vencer": l.days_to_expiry, Situação: EXPIRY_LABEL[l.expiry_status] ?? l.expiry_status, "Ordem de uso (FEFO)": l.fefo_rank, Saldo: l.balance, "Valor (R$)": l.value })) },
     ]);
   }
 
@@ -64,9 +65,9 @@ export function Inventory({ stock, centers, lots }: { stock: Any[]; centers: Any
 
       {tab === "geral" && (geral.length === 0 ? <Empty>Nenhum item.</Empty> : (
         <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-marfim">
-          <table className="w-full min-w-[960px] text-sm">
+          <table className="w-full min-w-[1060px] text-sm">
             <thead className="bg-azul text-left text-xs text-ouro">
-              <tr>{["Código", "Produto", "Local", "Mín.", "Entr.", "Saídas", "Atual", "Status", "Gastos", "% gastos", "% estoque", "Custo médio", "Giro", "ABC"].map((h) => <th key={h} className="px-3 py-2 font-semibold">{h}</th>)}</tr>
+              <tr>{["Código", "Produto", "Local", "Mín.", "Entr.", "Saídas", "Atual", "Status", "Gastos", "% gastos", "% estoque", "Custo médio", "Giro", "ABC", "Próx. validade"].map((h) => <th key={h} className="px-3 py-2 font-semibold">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-marfim/60">
               {geral.map((r) => (
@@ -85,6 +86,7 @@ export function Inventory({ stock, centers, lots }: { stock: Any[]; centers: Any
                   <td className="px-3 py-2 tabular-nums">{brl(r.avg_cost)}</td>
                   <td className="px-3 py-2 tabular-nums">{num(r.turnover, 2)}</td>
                   <td className="px-3 py-2 font-semibold">{r.abc_class}</td>
+                  <td className="px-3 py-2 text-xs">{r.next_expiry ? fmtDate(r.next_expiry) : Number(r.balance) > 0 ? "sem validade" : "—"}{Number(r.lots_with_balance) > 1 ? ` · ${r.lots_with_balance} lotes` : ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -107,35 +109,61 @@ export function Inventory({ stock, centers, lots }: { stock: Any[]; centers: Any
         </ul>
       ))}
 
-      {tab === "validade" && (
-        <>
-          {legacyCount > 0 && (
-            <p className="rounded-xl bg-ouro/40 px-3 py-2 text-sm">
-              {legacyCount} produtos têm saldo importado da planilha sem lote/validade. Abra o produto e informe lote e validade ao conferir a prateleira.
-            </p>
-          )}
-          {val.length === 0 ? <Empty>Nenhum lote com saldo.</Empty> : (
-            <ul className="space-y-2">
-              {val.map((l) => {
-                const d = l.days_to_expiry as number | null;
-                const cls = d === null ? "text-azul-600" : d < 0 ? "text-st-sem" : d <= 30 ? "text-st-quase" : d <= 90 ? "text-st-baixo" : "text-st-ok";
-                return (
-                  <li key={l.lot_id}>
-                    <Link href={`/produtos/${l.product_id}`} className="flex items-center justify-between gap-3 rounded-2xl bg-white p-3 ring-1 ring-marfim">
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-azul-600">{l.code} · {l.is_legacy ? "Saldo importado" : `Lote ${l.lot_number ?? "s/ nº"}`}</p>
-                        <p className="truncate text-sm font-medium">{l.name}</p>
-                        <p className={`text-xs font-semibold ${cls}`}>{l.expiry_date ? `${fmtDate(l.expiry_date)} · ${d! < 0 ? `vencido há ${-d!} dias` : `${d} dias`}` : "Sem validade"}</p>
-                      </div>
-                      <p className="font-display text-xl">{num(l.balance, 2)}</p>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
-      )}
+      {tab === "validade" && <Validities lots={val} legacyCount={legacyCount} />}
     </div>
+  );
+}
+
+const BUCKETS = ["vencido", "critico", "atencao", "aviso", "ok", "sem_validade"];
+
+function Validities({ lots, legacyCount }: { lots: Any[]; legacyCount: number }) {
+  const [bucket, setBucket] = useState("");
+  const counts = Object.fromEntries(BUCKETS.map((b) => [b, lots.filter((l) => l.expiry_status === b)]));
+  const shown = lots.filter((l) => !bucket || l.expiry_status === bucket);
+  const groups = new Map<string, Any[]>();
+  shown.forEach((l) => { const k = l.product_id; groups.set(k, [...(groups.get(k) ?? []), l]); });
+  const ordered = Array.from(groups.values()).map((g) => g.sort((a, b) => (a.fefo_rank ?? 99) - (b.fefo_rank ?? 99)))
+    .sort((a, b) => (a[0].expiry_date ?? "9999").localeCompare(b[0].expiry_date ?? "9999"));
+  return (
+    <>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {BUCKETS.map((b) => (
+          <button key={b} onClick={() => setBucket(bucket === b ? "" : b)} className={`rounded-xl bg-white p-2 text-left ring-1 ${bucket === b ? "ring-2 ring-azul" : "ring-marfim"}`}>
+            <ExpiryBadge status={b} />
+            <p className="mt-1 font-display text-xl leading-none">{counts[b].length}</p>
+            <p className="text-[11px] text-azul-600">{brl(counts[b].reduce((a: number, l: Any) => a + Number(l.value || 0), 0))}</p>
+          </button>
+        ))}
+      </div>
+      {legacyCount > 0 && (
+        <p className="rounded-xl bg-ouro/40 px-3 py-2 text-sm">
+          {legacyCount} lotes vieram da planilha como “saldo importado”. Os que tinham validade no inventário já estão datados; os demais aparecem em “Sem validade”.
+        </p>
+      )}
+      {ordered.length === 0 ? <Empty>Nenhum lote nesta faixa.</Empty> : (
+        <ul className="space-y-2">
+          {ordered.map((g) => (
+            <li key={g[0].product_id} className="rounded-2xl bg-white p-3 ring-1 ring-marfim">
+              <Link href={`/produtos/${g[0].product_id}`} className="block">
+                <p className="text-xs font-semibold text-azul-600">{g[0].code}</p>
+                <p className="text-sm font-medium">{g[0].name}</p>
+              </Link>
+              <ul className="mt-2 divide-y divide-marfim/60">
+                {g.map((l) => (
+                  <li key={l.lot_id} className="flex items-center justify-between gap-3 py-1.5">
+                    <div className="min-w-0 text-xs">
+                      <span className="mr-2 font-semibold">{l.fefo_rank === 1 ? "① Usar primeiro" : `${l.fefo_rank}º`}</span>
+                      {l.is_legacy ? "Saldo importado" : `Lote ${l.lot_number ?? "s/ nº"}`} · {l.expiry_date ? fmtDate(l.expiry_date) : "sem validade"}
+                      <span className="ml-2"><ExpiryBadge status={l.expiry_status} days={l.days_to_expiry} /></span>
+                    </div>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums">{num(l.balance, 2)}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }

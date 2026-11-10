@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Upload, Truck, MapPin, Building2, Users, ClipboardList, BarChart3, ChevronRight, Send, Layers, Ruler, Stethoscope, KeyRound } from "lucide-react";
+import { Settings2, SlidersHorizontal, Upload, Truck, MapPin, Building2, Users, ClipboardList, BarChart3, ChevronRight, Send, Layers, Ruler, Stethoscope, KeyRound } from "lucide-react";
 import { SignOutButton } from "./SignOutButton";
 import { PageHeader } from "@/components/ui";
 
@@ -20,6 +20,8 @@ const groups = [
     { href: "/mais/cadastros/unidades", label: "Unidades de medida", icon: Ruler },
   ] },
   { title: "Administração", links: [
+    { href: "/mais/configuracoes", label: "Configurações (regras do sistema)", icon: Settings2 },
+    { href: "/mais/parametros", label: "Parâmetros por produto (mínimo, máximo, local)", icon: SlidersHorizontal },
     { href: "/mais/importar", label: "Importar planilha", icon: Upload },
     { href: "/mais/usuarios", label: "Usuários e permissões", icon: Users },
     { href: "/mais/senha", label: "Alterar minha senha", icon: KeyRound },

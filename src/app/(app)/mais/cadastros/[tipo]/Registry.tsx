@@ -18,7 +18,7 @@ export const REGISTRIES = {
   ] as Col[] },
   destinos: { table: "destinations", title: "Destinos de saída", cols: [{ key: "name", label: "Destino", required: true, upper: true }] as Col[] },
   profissionais: { table: "professionals", title: "Profissionais", cols: [{ key: "name", label: "Nome", required: true, upper: true }, { key: "email", label: "E-mail", type: "email" }, { key: "phone", label: "Telefone", type: "tel" }] as Col[] },
-  processos: { table: "processes", title: "Processos", cols: [{ key: "name", label: "Processo", required: true, upper: true }, { key: "requires_lot", label: "Exige número de lote", type: "bool" }] as Col[] },
+  processos: { table: "processes", title: "Processos", cols: [{ key: "name", label: "Processo", required: true, upper: true }, { key: "requires_lot", label: "Exige número de lote", type: "bool" }, { key: "requires_expiry", label: "Exige validade", type: "bool" }] as Col[] },
   unidades: { table: "units", title: "Unidades de medida", cols: [{ key: "code", label: "Sigla", required: true, upper: true }, { key: "name", label: "Descrição", required: true }] as Col[] },
 };
 
@@ -65,7 +65,7 @@ export function Registry({ tipo }: { tipo: keyof typeof REGISTRIES }) {
   return (
     <div className="space-y-4">
       <PageHeader eyebrow="Cadastros" title={cfg.title} back="/mais"
-        action={can && !edit ? <Button className="h-10 px-3" onClick={() => setEdit({ active: true })}><Plus size={16} /> Novo</Button> : undefined} />
+        action={can && !edit ? <Button className="h-10 px-3" onClick={() => setEdit(tipo === "processos" ? { active: true, requires_expiry: true } : { active: true })}><Plus size={16} /> Novo</Button> : undefined} />
       {msg && <Alert type={msg.type}>{msg.text}</Alert>}
 
       {edit && (
@@ -107,7 +107,7 @@ export function Registry({ tipo }: { tipo: keyof typeof REGISTRIES }) {
                 <p className="truncate font-medium">{r[titleKey]}{tipo === "unidades" ? ` — ${r.name}` : ""}</p>
                 <p className="truncate text-xs text-azul-600">
                   {cfg.cols.slice(1).filter((c) => c.type !== "bool" && r[c.key] && !(tipo === "unidades" && c.key === "name")).map((c) => r[c.key]).join(" · ")}
-                  {tipo === "processos" ? (r.requires_lot ? "Exige lote e validade" : "Exige validade") : ""}
+                  {tipo === "processos" ? [r.requires_lot ? "Exige lote" : "Lote opcional", r.requires_expiry ? "exige validade" : "validade opcional"].join(" · ") : ""}
                   {r.active === false ? " · inativo" : ""}
                 </p>
               </div>

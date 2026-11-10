@@ -9,6 +9,7 @@ const hanken = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://estoque-rc.vercel.app"),
   title: { default: "Estoque RC", template: "%s · Estoque RC" },
   description: "Controle de estoque do Instituto RC Odontologia",
   manifest: "/manifest.webmanifest",

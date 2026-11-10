@@ -38,6 +38,7 @@ export type ImportPayload = {
   products: ProductIn[];
   entries: EntryIn[];
   exits: ExitIn[];
+  validades: { code: string; validades: { date: string; qty: number | null }[] }[];
   summary: Summary;
   issues: Issue[];
 };
@@ -51,6 +52,7 @@ export type Summary = {
   planilha: { variedade: number | null; quantidade: number | null; valor: number | null };
   products_review: number; negative_balance: { code: string; name: string; balance: number }[];
   errors: number; warnings: number; corrections: number;
+  validades_lidas: number;
 };
 
 const REQUIRED: Record<string, { headerRow: number; headers: Record<string, string> }> = {
@@ -88,6 +90,59 @@ function excelDate(v: unknown): string | null {
   return null;
 }
 
+const lastDay = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const iso = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+/** Converte um texto/valor de validade em data ISO. Aceita serial do Excel, dd/mm/aaaa, dd/mm/aa, mm/aaaa, aaaa-mm-dd. */
+export function parseExpiry(v: unknown): string | null {
+  if (typeof v === "number") return excelDate(v);
+  if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().slice(0, 10);
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return iso(+m[1], +m[2], +m[3]);
+  m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+  if (m) {
+    const y = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+    if (+m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= lastDay(y, +m[2])) return iso(y, +m[2], +m[1]);
+    return null;
+  }
+  m = t.match(/^(\d{1,2})[/.-](\d{4}|\d{2})$/);
+  if (m) {
+    const y = +m[2] < 100 ? 2000 + +m[2] : +m[2];
+    if (+m[1] >= 1 && +m[1] <= 12) return iso(y, +m[1], lastDay(y, +m[1]));
+  }
+  return null;
+}
+
+/** Uma célula pode ter várias validades: "10 - 05/2027; 5 - 08/2027", "05/2027 (10)" ou "10x 03/2028 e 4x 06/2028". */
+export function parseExpiryCell(v: unknown): { list: { date: string; qty: number | null }[]; bad: string[] } {
+  if (v === null || v === undefined || v === "") return { list: [], bad: [] };
+  if (typeof v === "number" || v instanceof Date) {
+    const d = parseExpiry(v);
+    return d ? { list: [{ date: d, qty: null }], bad: [] } : { list: [], bad: [String(v)] };
+  }
+  const parts = String(v).split(/[;\n|]+|,(?!\d)|\s+e\s+/i).map((p) => p.trim()).filter(Boolean);
+  const list: { date: string; qty: number | null }[] = [];
+  const bad: string[] = [];
+  for (const p of parts) {
+    const direct = parseExpiry(p);
+    if (direct) { list.push({ date: direct, qty: null }); continue; }
+    let qty: number | null = null;
+    let txt = p;
+    let m = p.match(/^(\d+(?:[.,]\d+)?)\s*(?:x|un\.?|unid\.?|-|:)\s*(.+)$/i);
+    if (m && /\d{1,2}[/.-]\d{2,4}/.test(m[2])) { qty = Number(m[1].replace(",", ".")); txt = m[2]; }
+    else {
+      m = p.match(/^(.+?)\s*\((\d+(?:[.,]\d+)?)\)$/);
+      if (m) { txt = m[1]; qty = Number(m[2].replace(",", ".")); }
+    }
+    txt = txt.replace(/^(val\.?|validade:?|venc\.?)\s*/i, "").trim();
+    const d = parseExpiry(txt);
+    if (d) list.push({ date: d, qty });
+    else bad.push(p);
+  }
+  return { list, bad };
+}
+
 function normDestination(v: string | null) {
   if (!v) return null;
   const u = unaccent(v).toUpperCase();
@@ -118,7 +173,7 @@ export function parsePlanilha(data: ArrayBuffer | Uint8Array, fileName: string):
   }
   const empty = (): ImportPayload => ({
     file_name: fileName, units: [], processes: [], centers: [], locations: [], suppliers: [], professionals: [], destinations: [],
-    products: [], entries: [], exits: [], issues, summary: summarize([], [], [], issues, 0, 0, 0, 0, 0, { variedade: null, quantidade: null, valor: null }, []),
+    products: [], entries: [], exits: [], validades: [], issues, summary: summarize([], [], [], issues, 0, 0, 0, 0, 0, { variedade: null, quantidade: null, valor: null }, []),
   });
   if (issues.some((i) => i.level === "erro")) return empty();
 
@@ -344,6 +399,33 @@ export function parsePlanilha(data: ArrayBuffer | Uint8Array, fileName: string):
   const extLinks = Object.keys(wb.Sheets.MOVI_SAID).filter((k) => wb.Sheets.MOVI_SAID[k]?.f?.includes("[1]")).length;
   if (extLinks) add("info", "MOVI_SAID", `${extLinks} fórmulas apontavam para outro arquivo (link externo "[1]CADA_PROD"). Ignorado: o sistema usa o cadastro importado.`);
 
+  // ---- validades do inventário (INVE_CENT "Validade Produto" e, se existir, coluna de validade no INVE_GERA)
+  const valByCode = new Map<string, { date: string; qty: number | null }[]>();
+  const readValidity = (sheet: string, headerRow: number, codeCol: string) => {
+    const ws = wb.Sheets[sheet];
+    if (!ws?.["!ref"]) return;
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    let col: string | null = null;
+    for (let c = range.s.c; c <= range.e.c; c++) { const a = XLSX.utils.encode_col(c); if (/valid|venc/i.test(String(v(sheet, `${a}${headerRow}`) ?? ""))) { col = a; break; } }
+    if (!col) return;
+    let bad = 0;
+    for (let r = headerRow + 1; r <= range.e.r + 1; r++) {
+      const code = str(v(sheet, `${codeCol}${r}`))?.toUpperCase();
+      if (!code || !codes.has(code)) continue;
+      const { list, bad: b } = parseExpiryCell(v(sheet, `${col}${r}`));
+      if (b.length) { bad++; add("aviso", sheet, `${code}: validade "${b.join("; ")}" não reconhecida (use dd/mm/aaaa ou mm/aaaa).`, r); }
+      if (list.length && !valByCode.has(code)) valByCode.set(code, list);
+    }
+    return bad;
+  };
+  readValidity("INVE_CENT", 6, "C");
+  readValidity("INVE_GERA", 4, "C");
+  const validades = Array.from(valByCode.entries()).map(([code, list]) => ({ code, validades: list }));
+  if (validades.length) {
+    const expired = validades.filter((x) => x.validades.some((d) => d.date < new Date().toISOString().slice(0, 10))).length;
+    add("info", "INVE_CENT", `${validades.length} produtos com validade no inventário — aplicadas ao saldo importado (vira o lote "Saldo importado" com validade).${expired ? ` ${expired} já estão vencidos e ficarão bloqueados para saída.` : ""}`);
+  } else add("aviso", "INVE_CENT", "Nenhuma validade preenchida na coluna \"Validade Produto\" do inventário. O saldo importado fica sem validade até a conferência.");
+
   // ---- saldo e totais
   const bal = new Map<string, number>();
   entries.forEach((e) => bal.set(e.product_code, (bal.get(e.product_code) ?? 0) + e.qty));
@@ -363,9 +445,10 @@ export function parsePlanilha(data: ArrayBuffer | Uint8Array, fileName: string):
   const processes = Array.from(procSet).map((name) => ({ name, requires_lot: LOT_PROCESSES.has(name) }));
   const payload: ImportPayload = {
     file_name: fileName, units, processes, centers, locations, suppliers, professionals, destinations: Array.from(destSet),
-    products, entries, exits, issues,
+    products, entries, exits, validades, issues,
     summary: summarize(products, entries, exits, issues, suppliers.length, locations.length, centers.length, professionals.length, exitsValuePlan, planilha, negative),
   };
+  payload.summary.validades_lidas = validades.length;
   return payload;
 }
 
@@ -385,5 +468,6 @@ function summarize(
     products_review: products.filter((p) => p.needs_review).length, negative_balance: negative,
     errors: issues.filter((i) => i.level === "erro").length, warnings: issues.filter((i) => i.level === "aviso").length,
     corrections: issues.filter((i) => i.level === "correcao").length,
+    validades_lidas: 0,
   };
 }

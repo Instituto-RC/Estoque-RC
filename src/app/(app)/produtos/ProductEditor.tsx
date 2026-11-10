@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ScanLine, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Alert, Button, Card, Field, inputCls } from "@/components/ui";
 import { Scanner } from "@/components/ProductPicker";
 import { useLookups, canWrite, friendlyError } from "@/lib/lookups";
+import { useSettings } from "@/lib/settings";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function ProductEditor({ product, processIds = [], photoUrl = null }: { product?: Record<string, any>; processIds?: string[]; photoUrl?: string | null }) {
@@ -21,6 +22,8 @@ export function ProductEditor({ product, processIds = [], photoUrl = null }: { p
     active: product?.active ?? true,
   });
   const [procs, setProcs] = useState<string[]>(processIds);
+  const st = useSettings();
+  useEffect(() => { if (isNew && st.loaded) setF((x) => (x.min_stock === "" ? { ...x, min_stock: String(st.num("estoque_minimo_padrao")) } : x)); }, [isNew, st.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(photoUrl);
   const [scan, setScan] = useState(false);
@@ -78,7 +81,7 @@ export function ProductEditor({ product, processIds = [], photoUrl = null }: { p
       <Card title={isNew ? "Dados do produto" : "Editar cadastro"}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Nome do produto" required className="sm:col-span-2"><input className={inputCls} value={f.name} onChange={set("name")} /></Field>
-          <Field label="Processos" required className="sm:col-span-2" hint={lotRule ? "Este produto exigirá lote e validade nas entradas." : "Validade obrigatória nas entradas; lote opcional."}>
+          <Field label="Processos" required className="sm:col-span-2" hint={lotRule ? "Este produto exigirá lote e validade nas entradas." : "Lote opcional; a validade segue a regra do processo (Mais → Processos)."}>
             <div className="flex flex-wrap gap-2">
               {lk.processes.map((p) => {
                 const on = procs.includes(p.id);
