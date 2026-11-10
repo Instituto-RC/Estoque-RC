@@ -32,5 +32,6 @@ Migrations em `supabase/migrations/` (aplicar em ordem). Testes de regras em `su
 - [x] Fase 0 — fundação: schema, RLS, auth, tema, navegação mobile, dashboard, lista de produtos
 - [x] Fase 1 — cadastros completos + importador da planilha (carga oficial feita)
 - [x] Fase 2 — entradas/saídas mobile, scanner, lotes, inventário (versão 1)
-- [~] Fase 3 — relatórios e lista de compras prontos; alertas por e-mail/WhatsApp pendentes
+- [x] Fase 3 — relatórios, lista de compras, parâmetros configuráveis, FEFO e validades (alertas por e-mail/WhatsApp pendentes)
+- [x] Carga oficial com a planilha atual (validades do inventário aplicadas)
 - [ ] Fase 4 — homologação e go-live

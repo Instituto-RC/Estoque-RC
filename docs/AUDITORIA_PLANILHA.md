@@ -69,3 +69,22 @@ Status por produto: 74 sem estoque · 12 quase sem · 136 baixo · 63 moderado �
 1. Revisar 6 produtos "revisar cadastro" (duplicados IRC0257/IRC0396, IRC0397/0398 incompletos, IRC0241 negativo, IRC0352).
 2. Conferir as prateleiras e informar lote/validade do "saldo importado" (prioridade: IMPLANTE e HOF).
 3. Completar fornecedores reais das 122 entradas "não informado", se desejado.
+
+## 7. Atualização — "Planilha de Controle de Estoque - Atual.xlsx" (10/11/2026)
+Comparação célula a célula com a versão anterior:
+- **INVE_CENT coluna O ("Validade Produto")**: 343 linhas preenchidas — 326 datas (01/01/2027 a 01/08/2034, nenhuma vencida) e 17 "sem estoque".
+- **CADA_PROD**: IRC0396–IRC0398 completados (mín. 20, custo R$ 23,60, UNID, IMPLANTE); linha vazia IRC0399 removida.
+- **MOVI_ENTR / MOVI_SAID / cadastros auxiliares**: sem alteração. Totais iguais (398 itens, 20.878 un., R$ 913.813,46).
+
+Carga completa refeita com a planilha atual (0 lançamentos manuais no sistema):
+
+| Faixa | Lotes | Unidades | Valor |
+|---|---|---|---|
+| OK (> 90 dias) | 277 | 19.596 | R$ 768.767,58 |
+| Atenção (≤ 60 dias) | 2 | 2 | R$ 66,26 |
+| Sem validade | 45 | 1.300 | R$ 28.439,62 |
+
+Sem validade: 42 produtos que não aparecem na aba INVE_CENT (erro antigo da planilha) + 3 marcados "sem estoque" com saldo no sistema (IRC0073 Micropório 1, IRC0290 Membrana importada 2, IRC0295 Osso importado 1g 2) — conferência física. Lista em "Conferencia de validades - 45 produtos.xlsx".
+47 validades pertencem a produtos com saldo zero e não geram lote.
+
+Testes de regra da versão 2 (`supabase/tests/regras_v2_fefo_parametros.sql`): 17/17 ok.
