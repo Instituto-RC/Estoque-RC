@@ -1,0 +1,14 @@
+{
+  "name": "Estoque RC · Instituto RC Odontologia",
+  "short_name": "Estoque RC",
+  "description": "Controle de estoque do Instituto RC Odontologia",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#23272f",
+  "theme_color": "#23272f",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
