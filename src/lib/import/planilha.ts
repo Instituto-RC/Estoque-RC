@@ -401,6 +401,7 @@ export function parsePlanilha(data: ArrayBuffer | Uint8Array, fileName: string):
 
   // ---- validades do inventário (INVE_CENT "Validade Produto" e, se existir, coluna de validade no INVE_GERA)
   const valByCode = new Map<string, { date: string; qty: number | null }[]>();
+  const semEstoque: { code: string; row: number }[] = [];
   const readValidity = (sheet: string, headerRow: number, codeCol: string) => {
     const ws = wb.Sheets[sheet];
     if (!ws?.["!ref"]) return;
@@ -412,7 +413,9 @@ export function parsePlanilha(data: ArrayBuffer | Uint8Array, fileName: string):
     for (let r = headerRow + 1; r <= range.e.r + 1; r++) {
       const code = str(v(sheet, `${codeCol}${r}`))?.toUpperCase();
       if (!code || !codes.has(code)) continue;
-      const { list, bad: b } = parseExpiryCell(v(sheet, `${col}${r}`));
+      const cell = v(sheet, `${col}${r}`);
+      if (typeof cell === "string" && /^\s*(sem estoque|s\/?\s*estoque|zerado|não tem|nao tem|-+)\s*$/i.test(cell)) { semEstoque.push({ code, row: r }); continue; }
+      const { list, bad: b } = parseExpiryCell(cell);
       if (b.length) { bad++; add("aviso", sheet, `${code}: validade "${b.join("; ")}" não reconhecida (use dd/mm/aaaa ou mm/aaaa).`, r); }
       if (list.length && !valByCode.has(code)) valByCode.set(code, list);
     }
@@ -421,6 +424,19 @@ export function parsePlanilha(data: ArrayBuffer | Uint8Array, fileName: string):
   readValidity("INVE_CENT", 6, "C");
   readValidity("INVE_GERA", 4, "C");
   const validades = Array.from(valByCode.entries()).map(([code, list]) => ({ code, validades: list }));
+  const saldoPrevio = new Map<string, number>();
+  entries.forEach((e) => saldoPrevio.set(e.product_code, (saldoPrevio.get(e.product_code) ?? 0) + e.qty));
+  exits.forEach((e) => saldoPrevio.set(e.product_code, (saldoPrevio.get(e.product_code) ?? 0) - e.qty));
+  if (semEstoque.length) {
+    const conflito = semEstoque.filter((x) => (saldoPrevio.get(x.code) ?? 0) > 0);
+    add("info", "INVE_CENT", `${semEstoque.length} produtos marcados como "sem estoque" na coluna de validade.`);
+    conflito.forEach((x) => add("aviso", "INVE_CENT", `${x.code} ${products.find((p) => p.code === x.code)?.name ?? ""}: inventário diz "sem estoque", mas as movimentações dão saldo ${saldoPrevio.get(x.code)}. Fazer contagem física.`, x.row));
+  }
+  const semValidade = products.filter((p) => (saldoPrevio.get(p.code) ?? 0) > 0 && !valByCode.has(p.code) && !semEstoque.some((s) => s.code === p.code));
+  if (valByCode.size && semValidade.length)
+    add("aviso", "INVE_CENT", `${semValidade.length} produtos com saldo não têm validade no inventário (a maioria não aparece na aba INVE_CENT): ${semValidade.map((p) => p.code).join(", ")}. Ficam em "Sem validade" para conferir.`);
+  const semSaldo = validades.filter((x) => !((saldoPrevio.get(x.code) ?? 0) > 0)).length;
+  if (semSaldo) add("info", "INVE_CENT", `${semSaldo} validades são de produtos sem saldo no sistema e não geram lote.`);
   if (validades.length) {
     const expired = validades.filter((x) => x.validades.some((d) => d.date < new Date().toISOString().slice(0, 10))).length;
     add("info", "INVE_CENT", `${validades.length} produtos com validade no inventário — aplicadas ao saldo importado (vira o lote "Saldo importado" com validade).${expired ? ` ${expired} já estão vencidos e ficarão bloqueados para saída.` : ""}`);
