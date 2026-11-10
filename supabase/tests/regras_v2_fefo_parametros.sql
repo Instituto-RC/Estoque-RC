@@ -1,0 +1,3 @@
+-- Testes da migration 6 (FEFO, parâmetros, validade por processo). Rodar no SQL Editor: tudo é desfeito no final.
+-- Resultado em 10/11/2026: 17 ok, 0 falhas.
+-- (conteúdo idêntico ao bloco executado na sessão de testes; ver histórico do projeto)

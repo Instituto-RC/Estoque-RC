@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FileSpreadsheet, Upload, CheckCircle2, AlertTriangle, Wrench, Info, XCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { parsePlanilha, type ImportPayload, type Level } from "@/lib/import/planilha";
+import { parsePlanilha, parseValidityWorkbook, type ImportPayload, type Level, type Issue } from "@/lib/import/planilha";
 import { Alert, Button, Card, PageHeader } from "@/components/ui";
 import { useLookups, friendlyError } from "@/lib/lookups";
 import { brl, num } from "@/lib/format";
@@ -24,6 +24,7 @@ export function Importer() {
   const [filter, setFilter] = useState<Level | "">("");
   const [result, setResult] = useState<Record<string, number | string> | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [valOnly, setValOnly] = useState<{ file: string; validades: ImportPayload["validades"]; issues: Issue[]; sheets: string[]; rows: number } | null>(null);
   const [valRes, setValRes] = useState<{ atualizados: number; separados: number; ignorados: number; avisos: { code: string; msg: string }[] } | null>(null);
 
   // Somente ambiente local de testes (NEXT_PUBLIC_TEST_IMPORT_URL=1): ?arquivo=<url> carrega a planilha sem o seletor de arquivos
@@ -40,10 +41,24 @@ export function Importer() {
 
   async function onFile(f: File | undefined) {
     if (!f) return;
-    setErr(null); setResult(null); setPayload(null); setReading(true);
+    setErr(null); setResult(null); setPayload(null); setValOnly(null); setValRes(null); setReading(true);
     try {
-      const buf = await f.arrayBuffer();
-      setPayload(parsePlanilha(new Uint8Array(buf), f.name));
+      const buf = new Uint8Array(await f.arrayBuffer());
+      const full = parsePlanilha(buf, f.name);
+      const isFull = !full.issues.some((i) => i.level === "erro" && /não encontrada/.test(i.message));
+      if (isFull) {
+        if (!full.validades.length) {
+          const g = parseValidityWorkbook(buf, full.products);
+          if (g.validades.length) { full.validades = g.validades; full.summary.validades_lidas = g.validades.length; full.issues.push(...g.issues); }
+        }
+        setPayload(full);
+      } else {
+        // não é a planilha completa: tenta ler como planilha de inventário com validades
+        const { data } = await createClient().from("products").select("code, name");
+        const g = parseValidityWorkbook(buf, (data ?? []) as { code: string; name: string }[]);
+        if (!g.validades.length) setErr("Não encontrei a planilha de controle nem uma coluna de validade com código/nome do produto neste arquivo.");
+        else setValOnly({ file: f.name, ...g });
+      }
     } catch (e) {
       setErr("Não foi possível ler o arquivo. Envie a planilha .xlsx original. " + (e as Error).message);
     } finally {
@@ -62,9 +77,10 @@ export function Importer() {
   }
 
   async function onlyValidities() {
-    if (!payload) return;
+    const list = payload?.validades ?? valOnly?.validades;
+    if (!list?.length) return;
     setSaving(true); setErr(null); setValRes(null);
-    const { data, error } = await createClient().rpc("aplicar_validades", { p: payload.validades });
+    const { data, error } = await createClient().rpc("aplicar_validades", { p: list });
     setSaving(false);
     if (error) return setErr(friendlyError(error.message));
     setValRes(data);
@@ -82,7 +98,7 @@ export function Importer() {
 
       <Card>
         <p className="text-sm text-azul-600">
-          Envie a <b className="text-azul">Planilha de Controle de Estoque</b> (.xlsx). Nada é gravado antes da sua confirmação. A carga pode ser refeita
+          Envie a <b className="text-azul">Planilha de Controle de Estoque</b> (.xlsx) para a carga completa, ou qualquer planilha de inventário com colunas de <b className="text-azul">código ou produto</b> e <b className="text-azul">validade</b> para preencher só as validades. Nada é gravado antes da sua confirmação. A carga pode ser refeita
           enquanto não houver movimentações lançadas pelo sistema — ela substitui a carga anterior.
         </p>
         <label className="mt-4 flex h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-marfim bg-neve text-azul-600 hover:border-azul">
@@ -101,6 +117,27 @@ export function Importer() {
           Saldo {num(Number(result.entries_qty) - Number(result.exits_qty))} un. · Valor em estoque {brl(Number(result.entries_value) - Number(result.exits_value))}.{" "}
           <Link href="/" className="font-semibold underline">Ver painel</Link>
         </Alert>
+      )}
+
+      {valOnly && (
+        <Card title="Planilha de validades">
+          <p className="text-sm">
+            <b>{valOnly.validades.length}</b> produtos com validade encontrados em {valOnly.rows} linhas ({valOnly.sheets.join(", ")}).
+            {" "}{valOnly.validades.filter((v) => v.validades.length > 1).length} têm mais de uma validade e serão separados em lotes.
+          </p>
+          {valOnly.issues.length > 0 && (
+            <ul className="mt-3 max-h-60 space-y-1 overflow-auto text-sm">
+              {valOnly.issues.map((i, n) => <li key={n} className="rounded-lg bg-neve px-3 py-1.5"><span className="mr-1 text-[11px] font-semibold text-azul-600">{i.sheet} · linha {i.row}</span>{i.message}</li>)}
+            </ul>
+          )}
+          {valRes ? (
+            <div className="mt-3"><Alert type="ok">Validades aplicadas: {valRes.atualizados} produtos datados{valRes.separados ? ", " + valRes.separados + " separados em vários lotes" : ""}{valRes.ignorados ? ", " + valRes.ignorados + " sem saldo importado (ignorados)" : ""}.
+              {valRes.avisos?.length ? <span className="mt-1 block text-xs">{valRes.avisos.map((a) => a.code + ": " + a.msg).join(" · ")}</span> : null}</Alert></div>
+          ) : (
+            <Button onClick={onlyValidities} disabled={saving} className="mt-3 w-full">{saving ? "Aplicando..." : "Aplicar validades ao saldo importado"}</Button>
+          )}
+          <p className="mt-2 text-xs text-azul-600">Não altera quantidades nem movimentações: só data o lote “Saldo importado da planilha” de cada produto.</p>
+        </Card>
       )}
 
       {s && (

@@ -471,3 +471,65 @@ function summarize(
     validades_lidas: 0,
   };
 }
+
+/**
+ * Lê validades de QUALQUER planilha de inventário (não precisa ser a planilha completa).
+ * Procura em todas as abas uma linha de cabeçalho com coluna de validade e coluna de código (IRC…) ou nome do produto.
+ * Se houver coluna de quantidade, ela é usada para separar o saldo em lotes por validade.
+ */
+export function parseValidityWorkbook(
+  data: ArrayBuffer | Uint8Array,
+  products: { code: string; name: string }[],
+): { validades: ImportPayload["validades"]; issues: Issue[]; sheets: string[]; rows: number } {
+  const wb = XLSX.read(data, { type: "array", cellDates: false });
+  const issues: Issue[] = [];
+  const byCode = new Map(products.map((p) => [p.code.toUpperCase(), p.code]));
+  const byName = new Map(products.map((p) => [keyOf(p.name), p.code]));
+  const out = new Map<string, { date: string; qty: number | null }[]>();
+  const sheets: string[] = [];
+  let rows = 0;
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws?.["!ref"]) continue;
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: true });
+    let hr = -1, cVal = -1, cCode = -1, cName = -1, cQty = -1;
+    for (let r = 0; r < Math.min(grid.length, 20); r++) {
+      const row = (grid[r] ?? []).map((x) => unaccent(String(x ?? "")).toLowerCase());
+      const iv = row.findIndex((h) => /valid|venc/.test(h));
+      if (iv < 0) continue;
+      hr = r; cVal = iv;
+      cCode = row.findIndex((h) => /^cod|codigo|^cód/.test(h));
+      cName = row.findIndex((h) => /produto|descri|nome|item|material/.test(h));
+      cQty = row.findIndex((h, i) => i !== iv && /qtd|quant|estoque atual|saldo/.test(h));
+      break;
+    }
+    if (hr < 0 || (cCode < 0 && cName < 0)) continue;
+    let used = 0;
+    for (let r = hr + 1; r < grid.length; r++) {
+      const row = grid[r] ?? [];
+      const raw = row[cVal];
+      if (raw === null || raw === undefined || raw === "") continue;
+      const codeRaw = cCode >= 0 ? String(row[cCode] ?? "").trim().toUpperCase() : "";
+      const code = byCode.get(codeRaw) ?? (cName >= 0 ? byName.get(keyOf(row[cName])) : undefined);
+      const label = codeRaw || String(row[cName] ?? "");
+      if (!code) { issues.push({ level: "aviso", sheet: sn, row: r + 1, message: `Produto "${label}" não encontrado no sistema — validade ignorada.` }); continue; }
+      const { list, bad } = parseExpiryCell(raw);
+      if (bad.length) issues.push({ level: "aviso", sheet: sn, row: r + 1, message: `${code}: validade "${bad.join("; ")}" não reconhecida.` });
+      if (!list.length) continue;
+      const qty = cQty >= 0 ? num(row[cQty]) : null;
+      const items = list.length === 1 && qty !== null && qty > 0 ? [{ date: list[0].date, qty }] : list;
+      // mesma planilha com várias linhas do mesmo produto (uma por validade) → acumula
+      out.set(code, [...(out.get(code) ?? []), ...items]);
+      used++; rows++;
+    }
+    if (used) sheets.push(sn);
+  }
+  // produto com uma única validade: não precisa de quantidade (aplica ao saldo todo)
+  const validades = Array.from(out.entries()).map(([code, list]) => {
+    const merged = new Map<string, number | null>();
+    list.forEach((v) => merged.set(v.date, merged.has(v.date) && merged.get(v.date) !== null && v.qty !== null ? (merged.get(v.date) as number) + v.qty : v.qty));
+    const arr = Array.from(merged.entries()).map(([date, qty]) => ({ date, qty }));
+    return { code, validades: arr.length === 1 ? [{ date: arr[0].date, qty: null }] : arr };
+  });
+  return { validades, issues, sheets, rows };
+}
