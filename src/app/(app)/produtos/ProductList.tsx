@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Search, AlertCircle } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { brl, num, STATUS_ORDER } from "@/lib/format";
@@ -32,15 +33,17 @@ export function ProductList({ rows, initialStatus }: { rows: ProductRow[]; initi
     [rows],
   );
 
+  const [review, setReview] = useState(false);
   const filtered = useMemo(() => {
     const nq = norm(q.trim());
     return rows.filter(
       (r) =>
         (!nq || norm(`${r.code} ${r.name}`).includes(nq)) &&
         (!status || r.status === status) &&
-        (!proc || (r.processes ?? "").split("/").includes(proc)),
+        (!proc || (r.processes ?? "").split("/").includes(proc)) &&
+        (!review || r.needs_review),
     );
-  }, [rows, q, status, proc]);
+  }, [rows, q, status, proc, review]);
 
   return (
     <>
@@ -58,7 +61,7 @@ export function ProductList({ rows, initialStatus }: { rows: ProductRow[]; initi
         <div className="flex gap-2">
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 flex-1 rounded-xl bg-white px-2 text-sm ring-1 ring-marfim">
             <option value="">Todos os status</option>
-            {STATUS_ORDER.map((s) => (
+            {[...STATUS_ORDER, "Sem mínimo definido"].map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
@@ -69,7 +72,7 @@ export function ProductList({ rows, initialStatus }: { rows: ProductRow[]; initi
             ))}
           </select>
         </div>
-        <p className="text-xs text-azul-600">{num(filtered.length)} de {num(rows.length)} produtos</p>
+        <div className="flex items-center justify-between"><p className="text-xs text-azul-600">{num(filtered.length)} de {num(rows.length)} produtos</p><label className="flex items-center gap-1.5 text-xs font-medium"><input type="checkbox" checked={review} onChange={(e) => setReview(e.target.checked)} className="accent-[#23272F]" /> Só “revisar cadastro” ({rows.filter((r) => r.needs_review).length})</label></div>
       </div>
 
       {rows.length === 0 ? (
@@ -79,7 +82,7 @@ export function ProductList({ rows, initialStatus }: { rows: ProductRow[]; initi
       ) : (
         <ul className="space-y-2">
           {filtered.map((r) => (
-            <li key={r.product_id} className="rounded-2xl bg-white p-3 ring-1 ring-marfim">
+            <li key={r.product_id}><Link href={`/produtos/${r.product_id}`} className="block rounded-2xl bg-white p-3 ring-1 ring-marfim active:bg-neve">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-azul-600">
@@ -104,7 +107,7 @@ export function ProductList({ rows, initialStatus }: { rows: ProductRow[]; initi
                   </span>
                 )}
               </div>
-            </li>
+            </Link></li>
           ))}
         </ul>
       )}

@@ -19,16 +19,17 @@ type Row = {
 
 export default async function Dashboard() {
   const supabase = await createClient();
-  const [{ data: stock }, { data: lots }, { data: monthly }] = await Promise.all([
+  const [{ data: stock }, { data: lots }, { data: monthly }, { data: totals }] = await Promise.all([
     supabase.from("v_product_stock").select("product_id, code, name, balance, min_stock, stock_value, status, active").eq("active", true),
     supabase.from("v_lot_stock").select("lot_id, days_to_expiry, balance").gt("balance", 0).lte("days_to_expiry", 30),
     supabase.from("v_monthly_movements").select("*").order("month", { ascending: false }).limit(1),
+    supabase.from("v_totals").select("*").maybeSingle(),
   ]);
 
   const rows = (stock ?? []) as Row[];
-  const totalValue = rows.reduce((a, r) => a + Number(r.stock_value || 0), 0);
-  const totalQty = rows.reduce((a, r) => a + Math.max(0, Number(r.balance || 0)), 0);
-  const byStatus = STATUS_ORDER.map((s) => ({ s, n: rows.filter((r) => r.status === s).length }));
+  const totalValue = Number(totals?.stock_value ?? 0);
+  const totalQty = Number(totals?.qty_in_stock ?? 0);
+  const byStatus = [...STATUS_ORDER, "Sem mínimo definido"].map((s) => ({ s, n: rows.filter((r) => r.status === s).length }));
   const critical = rows
     .filter((r) => ["Sem estoque", "Quase sem estoque", "Estoque baixo"].includes(r.status) && Number(r.min_stock) > 0)
     .sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status))
@@ -74,7 +75,7 @@ export default async function Dashboard() {
 
       <section className="rounded-2xl bg-white p-4 ring-1 ring-marfim">
         <h2 className="mb-3 text-lg">Situação dos produtos</h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {byStatus.map(({ s, n }) => (
             <Link key={s} href={`/produtos?status=${encodeURIComponent(s)}`} className="rounded-xl bg-neve p-3">
               <p className="font-display text-2xl">{n}</p>
@@ -116,6 +117,7 @@ export default async function Dashboard() {
           </div>
           <p className="font-display text-3xl">{num(lots?.length ?? 0)}</p>
           <p className="text-sm text-azul-600">lotes vencidos ou vencendo em até 30 dias</p>
+          <Link href="/inventario" className="mt-2 inline-block text-sm font-semibold underline">Ver validades</Link>
         </section>
       </div>
     </div>

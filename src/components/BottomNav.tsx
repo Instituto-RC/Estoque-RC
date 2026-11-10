@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ArrowDownToLine, ArrowUpFromLine, Menu } from "lucide-react";
+import { LayoutDashboard, Package, ArrowDownToLine, ArrowUpFromLine, Menu, ClipboardList, BarChart3 } from "lucide-react";
 
 const items = [
   { href: "/", label: "Início", icon: LayoutDashboard },
@@ -42,14 +42,15 @@ export function SideNav() {
   const path = usePathname();
   const all = [
     ...items.slice(0, 4),
-    { href: "/inventario", label: "Inventário", icon: Package },
+    { href: "/inventario", label: "Inventário", icon: ClipboardList },
+    { href: "/mais/relatorios", label: "Relatórios", icon: BarChart3 },
     { href: "/mais", label: "Cadastros e mais", icon: Menu },
   ];
   return (
     <nav className="hidden md:block">
       <ul className="space-y-1">
         {all.map(({ href, label, icon: Icon }) => {
-          const active = href === "/" ? path === "/" : path.startsWith(href);
+          const active = href === "/" ? path === "/" : href === "/mais" ? path === "/mais" || (path.startsWith("/mais/") && !path.startsWith("/mais/relatorios")) : path.startsWith(href);
           return (
             <li key={href}>
               <Link

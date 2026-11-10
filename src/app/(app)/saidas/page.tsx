@@ -1,7 +1,7 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { SaidaForm } from "./SaidaForm";
 
 export const metadata = { title: "Saída" };
 
 export default function Page() {
-  return <ComingSoon title="Saída" description="Registrar saída / consumo" phase="Fase 2" />;
+  return <SaidaForm />;
 }

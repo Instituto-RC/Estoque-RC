@@ -1,22 +1,21 @@
-// Assinatura provisória. Substituir pelos arquivos oficiais do Brand Pack (brasão + logotipo).
-export function Logo({ tone = "light", className = "" }: { tone?: "light" | "dark"; className?: string }) {
-  const color = tone === "light" ? "text-neve" : "text-azul";
+import { Assinatura, Brasao } from "@/components/brand/Brand";
+
+/** Cabeçalho: assinatura horizontal oficial + rótulo do sistema. */
+export function Logo({ tone = "onDark", className = "" }: { tone?: "onDark" | "onLight"; className?: string }) {
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex items-center gap-3 ${className}`}>
+      <Assinatura tone={tone} className="h-7 w-auto" />
       <span
-        className={`grid h-9 w-9 place-items-center rounded-lg font-display text-sm ${
-          tone === "light" ? "bg-ouro text-azul" : "bg-azul text-ouro"
+        className={`border-l pl-3 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+          tone === "onDark" ? "border-azul-600 text-ouro" : "border-marfim text-azul-600"
         }`}
-        aria-hidden
       >
-        RC
-      </span>
-      <span className={`font-display text-lg leading-none ${color}`}>
-        Instituto RC
-        <span className={`block text-[11px] font-sans font-medium tracking-[0.18em] uppercase ${tone === "light" ? "text-ouro" : "text-azul-600"}`}>
-          Estoque
-        </span>
+        Estoque
       </span>
     </div>
   );
+}
+
+export function LogoMark({ className = "h-7 w-auto" }: { className?: string }) {
+  return <Brasao tone="onDark" className={className} />;
 }

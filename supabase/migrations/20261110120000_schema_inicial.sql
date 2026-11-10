@@ -217,7 +217,7 @@ $$;
 create table if not exists public.lots (
   id           uuid primary key default gen_random_uuid(),
   product_id   uuid not null references public.products(id) on delete cascade,
-  lot_number   text,                      -- obrigatório para IMPLANTE / HOF / CIRURGIA
+  lot_number   text,                      -- obrigatório para IMPLANTE / HOF
   expiry_date  date,                      -- obrigatório para entradas novas
   supplier_id  uuid references public.suppliers(id),
   is_legacy    boolean not null default false,  -- saldo importado da planilha (sem lote)
@@ -635,7 +635,7 @@ on conflict (code) do nothing;
 insert into public.processes (name, requires_lot, requires_expiry) values
   ('IMPLANTE', true, true),
   ('HOF', true, true),
-  ('CIRURGIA', true, true),
+  ('CIRURGIA', false, true),
   ('DENTISTICA', false, true),
   ('ESTERILIZAÇÃO', false, true),
   ('PROTESE', false, true),

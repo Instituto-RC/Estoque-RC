@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 472 405" width="472" height="405" fill="currentColor">
+<defs><clipPath id="c"><rect width="472" height="405"/></clipPath></defs>
+<g clip-path="url(#c)"><g transform="translate(-1418 -551)">
+<path d="M1772 885.496L1516.432 885.496L1516.432 629.57L1772 629.57L1772 885.496Z" fill="currentColor"/>
+<path d="M1678.114 791.478L1526.315 791.478L1526.315 639.467L1678.114 639.467L1678.114 791.478Z" fill="currentColor"/>
+<path d="M1418 531L1516.432 531L1516.432 629.57L1418 629.57L1418 531Z" fill="currentColor"/>
+<path d="M1772 856.005L1890 856.005L1890 1003.663L1772 1003.663L1772 856.005Z" fill="currentColor"/>
+<path d="M1772 590.183L1890 590.183L1890 629.571L1772 629.571L1772 590.183Z" fill="currentColor"/>
+<path d="M1418 885.497L1516.432 885.497L1516.432 924.886L1418 924.886L1418 885.497Z" fill="currentColor"/>
+<path d="M1516.432 924.886L1607.749 924.887L1607.749 1003.664L1516.432 1003.664L1516.432 924.886Z" fill="currentColor"/>
+<path d="M1759 757.5C1759 820.737 1707.737 872 1644.5 872C1581.263 872 1530 820.737 1530 757.5C1530 694.263 1581.263 643 1644.5 643C1707.737 643 1759 694.263 1759 757.5Z" fill="var(--pattern-bg, #F2F2F2)"/>
+</g></g>
+</svg>

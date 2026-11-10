@@ -13,7 +13,8 @@ export const metadata: Metadata = {
   description: "Controle de estoque do Instituto RC Odontologia",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Estoque RC", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icons/icon.svg", apple: "/icons/icon.svg" },
+  icons: { icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }, { url: "/icons/favicon-32.png", sizes: "32x32" }], apple: "/icons/apple-touch-icon.png" },
+  openGraph: { title: "Estoque RC", description: "Controle de estoque do Instituto RC Odontologia", images: ["/og.png"] },
 };
 
 export const viewport: Viewport = {
